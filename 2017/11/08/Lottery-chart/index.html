@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>关于彩票走势页面绘图的思考 | Teresa&#39;s Coding Blog</title>
+  
+  
+  <!--link rel="stylesheet" href="//cdn.jsdelivr.net/highlight.js/9.10.0/styles/github-gist.min.css"-->
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/highlight.js/9.10.0/styles/github-gist.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+<div class="Shell">
+    <aside class='SideBar'>
+    <section class='avatar' style="background-image: url()">
+        <div class='av-pic' style="background-image: url(/assets/avatar.png)">
+        </div>
+    </section>
+    <section class='menu'>
+        <div>Teresa&#39;s Coding Blog</div>
+        
+        <ul>
+          
+            <a href="/" class="Btn">
+              <li>主页</li>
+            </a>  
+          
+            <a href="/archives/" class="Btn">
+              <li>所有文章</li>
+            </a>  
+          
+            <a href="/tags/" class="Btn">
+              <li>标签</li>
+            </a>  
+          
+        </ul>
+    </section>
+    <section class="media">
+        
+            
+                <a href="https://github.com/uMina">
+                    <img src="/assets/github.svg" />
+                </a>
+            
+        
+    </section>
+</aside>
+
+    <div class="container">
+        <div data-pager-shell>
+            <div>
+  <article class='ContentView'>
+    <header class='PageTitle'>
+        <h1>关于彩票走势页面绘图的思考</h1>
+    </header>
+
+    <section>
+      <p>彩票App的核心功能大致分为两部分，一是支付兑奖，二是信息展示。前者主要是考核业务逻辑的规划，而后者是对展示功能本身的理解。<br>根据前段时间得到一个彩票类Demo，其开奖历史以及走势图如下：</p>
+<center><img src="./assets/GIFs/20171110_oldDemo.gif" alt="原动画" title="源视图"> </center><br>从这波操作能看出以下几点：<br>1.数据源只能展示当前100期，未能更新数据（后面再看）<br>2.滑动动画特别流畅（优点）<br>3.Ugly UI。按钮设计突出，上下联空隙过大。抱歉，被生得丑确实很无辜，但是主动造得丑就是罪过（缺点）<br><br>再来看看内存状态吧：<br><center><img src="./assets/GIFs/20171110_oldDemo_memory.gif" alt="内存状态" title="内存状态"> </center><br>当弹出走势图页面时，内存有一次增加，应该是获取数据并绘图，此时的内存增加是正常的。但是在之后几次走势图切换时，数据并没有变化，内存却持续增长，从56.2MB到213.5MB，而且还有持续的趋势，这就应该是出现了代码编写事故了。<br>4.内存不合理暴增（缺点）<br><br>不过第3点只跟界面设计者没有美学感知力有关，这里不做讨论，就从去结合源码来看第1.2.4点吧。<br><br>首先注意到的是这界面的VerticalScrollIndicator,推测这页面是基于UIScrollView或其子类开发的，因此也特别顺滑，既然如此原则上是可以使用MJRefresh这样的三方库来实现数据动态刷新，不过却没有实现，不过通过观察数据接口，借口设计为每次获取数据仅获得当前时间点之前的100期数据，没有提供刷新更早期数据的方式，所以设计既然如此，没有编写动态刷新也就罢了。<br><br>然后再推测内存爆增，在数据量如此小的情况下，数据爆增的主要原因应该是UI出问题了，果不其然，贴图如下：<br><center><img src="./assets/PNGs/20171110_hierarchy_old.png" alt="UI Hierarchy" title="UI Hierarchy"></center><br>可不可怕？可不可怕！这页面竟然写成这样，UIView上嵌套一个UIScrollView，contentView.frame.height根据数据源数量来设置，然后再在contentView上画一个layer，而且是每次切换页面都要重新new一个UIView放上去，这内存都不暴涨谁涨？再看看代码[尴尬哭脸]，算了还是不改了，自己重写吧。<br><br>其实总的来说，这套demo还是有几处做得不错的地方，比如使用UISCrollView来呈现数据，使用控件本身的滑动动画省力又省心。有待提升的地方，可以考虑使用UITableView，每个Cell呈现一整页一次获取的数据并绘制，但是显示时把最下面一行数据n给剪切掉（为了画折线图），下一个cell获取数据时从第n-1条数据开始获取并绘制，并剪切掉第n-1条数据的展示（为了折线），不过这也需要服务器的助攻，包括接口提供（从第几条开始获取，获取多少行，首行或者莫行的北京填充数组是什么）。这样的设计既能保留顺滑的动画效果，还能无限动态刷新数据。不过我想尝试下新的方法，反正又没干这一行，写着玩嘛 - -…<br><center><img src="./assets/GIFs/20171110_newDemo.gif" alt="newDemo" title="newDemo"></center>
+
+<p>可以看到，新Demo从初始化48.5MB到数据加载和绘图，到56.6MB后内存量就稳定住了。论顺滑程度嘛，其实也还是挺顺滑的，只是缺少了惯性滑动，当手指停止滚动时界面立刻也停止滚动了。再附一张层次图：</p>
+<center><img src="./assets/PNGs/20171110_hierarchy_new.jpeg" alt="New UI Hierarchy" title="New UI Hierarchy"></center>
+
+<p>😁希望这时候看贴的你已经猜到我尝试的方法了。</p>
+<p>1.没有使用UIScrollView，使用直接在UIView的layer上添加layer的方式进行绘制；<br>2.设置一个比较小的时间间隔，超过这个时间间隔就将这个时间间隔内手指滑动的位移传递给数据层去处理，将原layer全部清除，绘制新的layer；<br>3.背景填充数据是自己算的，但是我也不太买彩票，也不知道到底该从首行开始计算还是从尾行还是计算，随意选了尾行来开始计算的，可以看到某一个画面是尾行填充数字基本都是1；<br>4.折线与背景填充数字是不同的layer层；<br>5.其实用这种方式也是能完成数据的继续刷新的，假设当前数据最大行是n，一页数据一共有p项，那么我可以设置提前两页就去刷新数据，即当绘制layer时监测到第（n-2p）行数据已经被读取时，就去服务器取更多的数据，并将其加入现有数据源，当用户持续看更下层的数据时就可以无缝衔接了；只是这样来看的话，背景填充数据最好还是从数据源首行开始计算[掩面而泣]</p>
+<p>终于写完了…祝自己越来越美丽（⺻▽⺻ ）</p>
+
+
+      
+
+    </section>
+    
+      <section class='ArticleMeta'>
+          <div>
+            发布于&nbsp;
+            <time datetime="2017-11-08T02:40:30.000Z" itemprop="datePublished">
+              2017-11-08
+            </time>
+          </div>
+          
+            <div>
+              tags: 
+  <li class="meta-text">
+  { <a href="/tags/彩票/">彩票</a> }
+  </li>
+
+  <li class="meta-text">
+  { <a href="/tags/绘图/">绘图</a> }
+  </li>
+
+  <li class="meta-text">
+  { <a href="/tags/iOS/">iOS</a> }
+  </li>
+
+
+            </div>
+          
+      </section>
+    
+    
+</article>
+
+  
+</div>
+
+            <footer>
+    <div>© 2016 - Teresa </div>
+    <div>
+    Powered by Hexo
+    </div>
+</footer>
+
+        </div>
+    </div>
+</div>
+<script src="/js/pager/dist/singlepager.js"></script>
+<script>
+var sp = new Pager('data-pager-shell')
+
+</script>
+</body>
+</html>
